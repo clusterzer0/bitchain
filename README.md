@@ -1,7 +1,10 @@
 # bitchain
 
-`bitchain` is a small Rust CLI for managing content-addressed binary chains.
-It splits files into SHA-256 block hashes, stores block URIs, and can rebuild files from a bitchain JSON manifest.
+A lightweight **virtual filesystem** that uses the internet as block storage.
+
+`bitchain` is a Rust CLI for managing content-addressed binary chains.
+It breaks files into immutable SHA-256 blocks, distributes them across HTTP, HTTPS, S3, or local storage, and reconstructs them on demand.
+Perfect for versioning large files, distributing datasets, or building decentralized storage systems.
 
 ## Features
 
@@ -12,6 +15,27 @@ It splits files into SHA-256 block hashes, stores block URIs, and can rebuild fi
 - Rebuild files from a bitchain manifest
 - Validate bitchain JSON structure
 - Backwards-compatible old-style bitchain format support
+
+## How It Works
+
+```mermaid
+graph LR
+    A["📁 Input File(s)"] -->|Ingest| B["🔗 Split into Blocks"]
+    B -->|SHA-256 Hash| C["🔐 Content-Addressed Blocks"]
+    C -->|Upload| D["☁️ Block Storage"]
+    D -->|S3, HTTP, File| E["📝 Bitchain Manifest"]
+    E -->|Rebuild| F["📁 Reconstruct Files"]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff9c4
+    style C fill:#f3e5f5
+    style D fill:#c8e6c9
+    style E fill:#ffe0b2
+    style F fill:#e1f5ff
+```
+
+Each file is split into fixed-size blocks (default 1MB), hashed with SHA-256, and stored at URIs.
+The bitchain manifest records file paths and block URIs, enabling lossless reconstruction from any available block source.
 
 ## Install
 
@@ -25,6 +49,20 @@ Run from the workspace:
 
 ```bash
 cargo run -- <command>
+```
+
+## Development
+
+Use the included Makefile for common tasks:
+
+```bash
+make build    # Compile the project
+make test     # Run tests
+make lint     # Format and lint
+make fmt      # Format code
+make check    # Run cargo check
+make all      # build + lint + test
+make run      # Run with arguments
 ```
 
 ## Configuration
