@@ -1,8 +1,14 @@
+// Centralized, pinned Rust toolchain image — bump here to move every stage at once.
+// Build, test, and publish run inside this container so the Rust version stays
+// decoupled from the Jenkins agent host. Pinned to latest stable as of 2026-06.
+def RUST_IMAGE = 'rust:1.94'
+
 pipeline {
   agent any
 
   environment {
-    NEXUS_URL = 'https://nexus.softsurve.com'
+    NEXUS_URL  = 'https://nexus.softsurve.com'
+    CARGO_HOME = "${WORKSPACE}/.cargo"
   }
 
   stages {
@@ -24,12 +30,13 @@ pipeline {
     stage('Build & Test') {
       agent {
         docker {
-          image 'rust:slim'
+          image RUST_IMAGE
           reuseNode true
         }
       }
       steps {
         sh '''
+          rustup component add rustfmt clippy
           cargo fmt --check
           cargo clippy -- -D warnings
           cargo test
@@ -47,7 +54,7 @@ pipeline {
     stage('Publish') {
       agent {
         docker {
-          image 'rust:slim'
+          image RUST_IMAGE
           reuseNode true
         }
       }
@@ -58,8 +65,8 @@ pipeline {
           passwordVariable: 'NEXUS_PASS'
         )]) {
           sh '''
-            mkdir -p ~/.cargo
-            cat >> ~/.cargo/config.toml <<EOF
+            mkdir -p "$CARGO_HOME"
+            cat >> "$CARGO_HOME/config.toml" <<EOF
 [registries.lockamy]
 index = "${NEXUS_URL}/repository/cargo-hosted/"
 
@@ -67,8 +74,8 @@ index = "${NEXUS_URL}/repository/cargo-hosted/"
 default = "lockamy"
 EOF
             printf '[registries.lockamy]\ntoken = "%s:%s"\n' \
-              "${NEXUS_USER}" "${NEXUS_PASS}" >> ~/.cargo/credentials.toml
-            chmod 0600 ~/.cargo/credentials.toml
+              "${NEXUS_USER}" "${NEXUS_PASS}" >> "$CARGO_HOME/credentials.toml"
+            chmod 0600 "$CARGO_HOME/credentials.toml"
 
             cargo publish --registry lockamy
           '''
