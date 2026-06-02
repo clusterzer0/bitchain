@@ -52,6 +52,7 @@ pipeline {
 
     // ── Publish → Nexus (Cargo) ────────────────────────────────────────────────
     stage('Publish') {
+      when { branch 'main' }
       agent {
         docker {
           image RUST_IMAGE
@@ -59,12 +60,45 @@ pipeline {
         }
       }
       steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'nexus-credentials',
-          usernameVariable: 'NEXUS_USER',
-          passwordVariable: 'NEXUS_PASS'
-        )]) {
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'nexus-credentials',
+            usernameVariable: 'NEXUS_USER',
+            passwordVariable: 'NEXUS_PASS'
+          ),
+          usernamePassword(
+            credentialsId: 'github-token',
+            usernameVariable: 'GIT_USER',
+            passwordVariable: 'GIT_TOKEN'
+          )
+        ]) {
           sh '''
+            git config user.email "ci@softsurve.com"
+            git config user.name  "Sol CI"
+
+            set -eu
+
+            origin=$(git config --get remote.origin.url)
+            path=$(printf '%s' "$origin" | sed -E 's#(git@github.com:|https://github.com/)##; s#[.]git$##')
+            remote="https://${GIT_USER}:${GIT_TOKEN}@github.com/${path}.git"
+
+            # Tags are the version source of truth — bump the patch above the latest vX.Y.Z.
+            git fetch --tags --quiet "$remote" || true
+            latest=$(git tag -l 'v*.*.*' | sort -V | tail -1)
+            if [ -z "$latest" ]; then
+              next="0.1.0"
+            else
+              v=${latest#v}; maj=${v%%.*}; rest=${v#*.}; min=${rest%%.*}; pat=${rest##*.}
+              next="${maj}.${min}.$((pat + 1))"
+            fi
+            echo "Publishing ${path} v${next}"
+
+            # Set the crate version for this publish (ephemeral; tags stay the source of truth).
+            if [ -f Cargo.toml ]; then
+              sed -i 's/^version = ".*"/version = "'"$next"'"/' Cargo.toml
+            fi
+
+            # Cargo registry auth.
             mkdir -p "$CARGO_HOME"
             cat >> "$CARGO_HOME/config.toml" <<EOF
 [registries.lockamy]
@@ -77,7 +111,12 @@ EOF
               "${NEXUS_USER}" "${NEXUS_PASS}" >> "$CARGO_HOME/credentials.toml"
             chmod 0600 "$CARGO_HOME/credentials.toml"
 
-            cargo publish --registry lockamy
+            # Publish (allow-dirty: the version was just set in-tree).
+            cargo publish --registry lockamy --allow-dirty
+
+            # Record the release as a tag and push it back to origin.
+            git tag "v${next}"
+            git push "$remote" "v${next}"
           '''
         }
       }
