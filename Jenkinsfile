@@ -102,7 +102,7 @@ pipeline {
             mkdir -p "$CARGO_HOME"
             cat >> "$CARGO_HOME/config.toml" <<EOF
 [registries.lockamy]
-index = "${NEXUS_URL}/repository/cargo-hosted/"
+index = "sparse+${NEXUS_URL}/repository/cargo-group/"
 
 [registry]
 default = "lockamy"
