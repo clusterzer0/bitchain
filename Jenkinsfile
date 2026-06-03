@@ -104,15 +104,18 @@ pipeline {
 [registries.lockamy]
 index = "sparse+${NEXUS_URL}/repository/cargo-group/"
 
+[registries.lockamy-hosted]
+index = "sparse+${NEXUS_URL}/repository/cargo-hosted/"
+
 [registry]
 default = "lockamy"
 EOF
-            printf '[registries.lockamy]\ntoken = "%s:%s"\n' \
-              "${NEXUS_USER}" "${NEXUS_PASS}" >> "$CARGO_HOME/credentials.toml"
+            printf '[registries.lockamy]\ntoken = "%s:%s"\n[registries.lockamy-hosted]\ntoken = "%s:%s"\n' \
+              "${NEXUS_USER}" "${NEXUS_PASS}" "${NEXUS_USER}" "${NEXUS_PASS}" >> "$CARGO_HOME/credentials.toml"
             chmod 0600 "$CARGO_HOME/credentials.toml"
 
             # Publish (allow-dirty: the version was just set in-tree).
-            cargo publish --registry lockamy --allow-dirty
+            cargo publish --registry lockamy-hosted --allow-dirty   # resolve via group (default), publish to hosted
 
             # Record the release as a tag and push it back to origin.
             git tag "v${next}"
