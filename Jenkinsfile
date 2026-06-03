@@ -110,8 +110,11 @@ index = "sparse+${NEXUS_URL}/repository/cargo-hosted/"
 [registry]
 default = "lockamy"
 EOF
-            printf '[registries.lockamy]\ntoken = "%s:%s"\n[registries.lockamy-hosted]\ntoken = "%s:%s"\n' \
-              "${NEXUS_USER}" "${NEXUS_PASS}" "${NEXUS_USER}" "${NEXUS_PASS}" >> "$CARGO_HOME/credentials.toml"
+            # Nexus speaks HTTP Basic; cargo sends the token verbatim as the Authorization header,
+            # so the token must be "Basic <base64(user:pass)>" — not a bare user:pass.
+            BASIC="Basic $(printf '%s:%s' "${NEXUS_USER}" "${NEXUS_PASS}" | base64 -w0)"
+            printf '[registries.lockamy]\ntoken = "%s"\n[registries.lockamy-hosted]\ntoken = "%s"\n' \
+              "${BASIC}" "${BASIC}" >> "$CARGO_HOME/credentials.toml"
             chmod 0600 "$CARGO_HOME/credentials.toml"
 
             # Publish (allow-dirty: the version was just set in-tree).
