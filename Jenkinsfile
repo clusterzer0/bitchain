@@ -118,11 +118,28 @@ EOF
             chmod 0600 "$CARGO_HOME/credentials.toml"
 
             # Publish (allow-dirty: the version was just set in-tree).
-            cargo publish --registry lockamy-hosted --allow-dirty   # resolve via group (default), publish to hosted
+            # Idempotent: a version already present on Nexus is treated as success,
+            # so re-running a build that already published doesn't fail the pipeline.
+            set +e
+            pub_out=$(cargo publish --registry lockamy-hosted --allow-dirty 2>&1)   # resolve via group (default), publish to hosted
+            pub_rc=$?
+            set -e
+            printf '%s\n' "$pub_out"
+            if [ "$pub_rc" -ne 0 ]; then
+              if printf '%s' "$pub_out" | grep -qiE 'already (exists|uploaded)|already been uploaded|version .* is already'; then
+                echo "v${next} already published — treating as success (idempotent)."
+              else
+                exit "$pub_rc"
+              fi
+            fi
 
-            # Record the release as a tag and push it back to origin.
-            git tag "v${next}"
-            git push "$remote" "v${next}"
+            # Record the release as a tag and push it back to origin (skip if it already exists).
+            if git rev-parse -q --verify "refs/tags/v${next}" >/dev/null; then
+              echo "Tag v${next} already exists locally — skipping tag."
+            else
+              git tag "v${next}"
+              git push "$remote" "v${next}" || echo "Tag push skipped (already on origin)."
+            fi
           '''
         }
       }
